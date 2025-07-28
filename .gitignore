@@ -1,3 +1,4 @@
 data/
 tmp/
 temp/
+__pycache__/
