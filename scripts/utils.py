@@ -28,3 +28,23 @@ def get_model(model_path, num_classes):
     model.to(config.device)
     model.eval()
     return model
+
+def preprocess_image(image):
+    transform = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+    image = Image.fromarray(image)
+    image = image.convert("RGB")
+    return transform(image).unsqueeze(0)
+
+def predict(model, image_tensor):
+    class_names = ["With Mask", "Without Mask"]
+    with torch.no_grad():
+        outputs = model(image_tensor)
+        # softmax to convert raw outputs to probabilities
+        probabilities = F.softmax(outputs, dim=1)[0]
+        confidence_scores = {class_names[i]: float(probabilities[i]) for i in range(len(class_names))}
+        
+        return confidence_scores
