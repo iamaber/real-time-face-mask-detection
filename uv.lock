@@ -975,6 +975,7 @@ dependencies = [
     { name = "opencv-python" },
     { name = "pillow" },
     { name = "python-multipart" },
+    { name = "req" },
     { name = "requests" },
     { name = "torch" },
     { name = "torchvision" },
@@ -989,10 +990,22 @@ requires-dist = [
     { name = "opencv-python", specifier = ">=4.11.0.86" },
     { name = "pillow", specifier = ">=11.3.0" },
     { name = "python-multipart", specifier = ">=0.0.20" },
+    { name = "req", specifier = ">=1.0.0" },
     { name = "requests", specifier = ">=2.32.4" },
     { name = "torch", specifier = ">=2.7.1" },
     { name = "torchvision", specifier = ">=0.22.1" },
     { name = "uvicorn", specifier = ">=0.35.0" },
+]
+
+[[package]]
+name = "req"
+version = "1.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "six" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/78/9f/afc194e1d4c37d259dfeb2330432611d330fe910699ad860da829f348e86/req-1.0.0-py2.py3-none-any.whl", hash = "sha256:9ee30b71347cef7dba1eb4a0132586b88828d8249cf2f7e606de5ac44810367e", size = 5925, upload-time = "2018-06-06T21:05:02.981Z" },
 ]
 
 [[package]]
