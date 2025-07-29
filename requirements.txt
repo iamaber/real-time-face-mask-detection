@@ -1,8 +1,10 @@
 torch
 torchvision
-torchinfo
+fastapi
+uvicorn
+python-multipart
+gradio
+requests
+opencv-python
 numpy
-matplotlib
-seaborn
-scikit-learn
-scipy
+Pillow
