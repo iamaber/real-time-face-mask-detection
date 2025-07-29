@@ -1,9 +1,8 @@
 torch
 torchvision
+torchinfo
 numpy
-pandas
-scikit-learn
-opencv-python
 matplotlib
-scipy
 seaborn
+scikit-learn
+scipy
