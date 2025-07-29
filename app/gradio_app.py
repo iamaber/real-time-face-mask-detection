@@ -34,5 +34,5 @@ with gr.Blocks() as demo:
     video_button.click(predict_mask_video, inputs=video_input, outputs=video_output)
 
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(share=True)
     
