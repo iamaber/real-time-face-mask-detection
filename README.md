@@ -1,6 +1,6 @@
 # Real-Time Face Mask Detection
 
-This project implements a real-time face mask detection system using PyTorch and MobileNetV3. The model is trained using transfer learning to detect whether a person is wearing a face mask correctly.
+This project implements a real-time face mask detection system using PyTorch and MobileNetV3. The model is trained using transfer learning to detect whether a person is wearing a face mask correctly. The website is built using FastAPI as its backend and Gradio as its interface.
 
 ## Datasets
 
