@@ -1,6 +1,7 @@
 import gradio as gr
-import requests
 import cv2
+import requests
+from main import app
 
 
 def predict_mask_image(image):
@@ -106,4 +107,17 @@ with gr.Blocks() as demo:
     video_button.click(predict_mask_video, inputs=video_input, outputs=video_output)
 
 if __name__ == "__main__":
+    import threading
+    import uvicorn
+    import time
+
+    # Start FastAPI server in a separate thread
+    def run_fastapi():
+        uvicorn.run(app, host="127.0.0.1", port=8000, log_level="info")
+
+    fastapi_thread = threading.Thread(target=run_fastapi, daemon=True)
+    fastapi_thread.start()
+    time.sleep(2)
+
+    # Launch Gradio interface
     demo.launch()
