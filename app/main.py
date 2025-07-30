@@ -2,7 +2,13 @@ from fastapi import FastAPI, UploadFile, File
 from PIL import Image
 import numpy as np
 import io
+import os 
+import sys
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from scripts.utils import get_model, preprocess_image, predict
+
 
 app = FastAPI()
 model_path = "models/best_mobilenet_mask_detector.pt"
