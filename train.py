@@ -1,47 +1,34 @@
 import os
+import random
 import warnings
-from dataclasses import dataclass
-from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 warnings.filterwarnings("ignore")
 
+import matplotlib
+
+matplotlib.use("Agg")
+
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+from sklearn.metrics import classification_report, confusion_matrix
 from torch.utils.data import DataLoader
 from torchvision import datasets, models, transforms
 
+from config import Config
 
-@dataclass
-class Config:
-    # Data paths from kaggle dataset
-    data_dir: str = "/kaggle/input/face-mask-12k-images-dataset/Face Mask Dataset"
-    test_data_dir: str = "/kaggle/input/face-mask-dataset/data"
-    model_save_path: str = "best_mobilenet_mask_detector.pt"
 
-    # Training hyperparameters
-    batch_size: int = 32
-    learning_rate: float = 1e-4
-    epochs: int = 30
-    dropout_rate: float = 0.5
-    weight_decay: float = 1e-4
-
-    # Early stopping
-    patience: int = 7
-    min_delta: float = 0.001
-
-    # Model architecture
-    intermediate_features: int = 640
-
-    # Device
-    device: str = "cuda" if torch.cuda.is_available() else "cpu"
-
-    # Focal loss parameters
-    focal_alpha: float = 1.0
-    focal_gamma: float = 2.0
+def seed_everything(seed: int) -> None:
+    """Seed python, numpy and torch so runs are reproducible."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 
 class DataManager:
@@ -81,6 +68,14 @@ class DataManager:
         }
         return transform_dict
 
+    def _loader_kwargs(self, shuffle: bool) -> Dict:
+        return {
+            "batch_size": self.config.batch_size,
+            "shuffle": shuffle,
+            "num_workers": self.config.num_workers,
+            "pin_memory": self.config.pin_memory,
+        }
+
     def load_datasets(self) -> Tuple[DataLoader, DataLoader, DataLoader]:
         transforms_dict = self.get_transforms()
 
@@ -100,20 +95,42 @@ class DataManager:
         self.class_names = train_data.classes
 
         # Create data loaders
-        train_loader = DataLoader(
-            train_data, batch_size=self.config.batch_size, shuffle=True
-        )
-        val_loader = DataLoader(
-            val_data, batch_size=self.config.batch_size, shuffle=False
-        )
-        test_loader = DataLoader(
-            test_data, batch_size=self.config.batch_size, shuffle=False
-        )
+        train_loader = DataLoader(train_data, **self._loader_kwargs(shuffle=True))
+        val_loader = DataLoader(val_data, **self._loader_kwargs(shuffle=False))
+        test_loader = DataLoader(test_data, **self._loader_kwargs(shuffle=False))
 
         return train_loader, val_loader, test_loader
 
+    def load_secondary_test_loader(
+        self,
+    ) -> Optional[Tuple[DataLoader, List[str]]]:
+        """Load the optional second Kaggle dataset used for extra testing."""
+        secondary_dir = self.config.test_data_dir
+        if not secondary_dir or not os.path.isdir(secondary_dir):
+            print(f"Secondary test dataset not found at {secondary_dir}; skipping.")
+            return None
+
+        try:
+            secondary_data = datasets.ImageFolder(
+                secondary_dir, transform=self.get_transforms()["val"]
+            )
+        except (FileNotFoundError, RuntimeError) as exc:
+            print(f"Could not load secondary test dataset: {exc}")
+            return None
+
+        print(f"Secondary test dataset samples: {len(secondary_data)}")
+        loader = DataLoader(secondary_data, **self._loader_kwargs(shuffle=False))
+        return loader, secondary_data.classes
+
 
 class FocalLoss(nn.Module):
+    """Focal loss for hard-example mining.
+
+    With the balanced 12K dataset, ``alpha`` is uniform (a no-op); the useful part
+    is the ``(1 - pt) ** gamma`` factor, which down-weights easy, well-classified
+    samples so training keeps focusing on the confused ones.
+    """
+
     def __init__(self, alpha: float = 1.0, gamma: float = 2.0, reduction: str = "mean"):
         super(FocalLoss, self).__init__()
         self.alpha = alpha
@@ -143,18 +160,21 @@ class EarlyStopping:
         self.best_score = None
         self.early_stop = False
 
-    def __call__(self, val_score: float, model: nn.Module) -> None:
+    def __call__(self, val_score: float, model: nn.Module) -> bool:
+        """Record the score and save the model if it improved. Returns True if saved."""
         if self.best_score is None:
             self.best_score = val_score
             self.save_checkpoint(model)
-        elif val_score < self.best_score + self.min_delta:
+            return True
+        if val_score < self.best_score + self.min_delta:
             self.counter += 1
             if self.counter >= self.patience:
                 self.early_stop = True
-        else:
-            self.best_score = val_score
-            self.save_checkpoint(model)
-            self.counter = 0
+            return False
+        self.best_score = val_score
+        self.save_checkpoint(model)
+        self.counter = 0
+        return True
 
     def save_checkpoint(self, model: nn.Module) -> None:
         """Save model checkpoint"""
@@ -189,6 +209,14 @@ class MaskDetector:
 
         return model.to(self.device)
 
+    def print_model_summary(self) -> None:
+        """Print a compact layer/parameter summary without extra dependencies."""
+        total = sum(p.numel() for p in self.model.parameters())
+        trainable = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+        print(self.model.classifier)
+        print(f"Total parameters: {total:,}")
+        print(f"Trainable parameters: {trainable:,}")
+
 
 class Trainer:
     def __init__(self, model: nn.Module, config: Config):
@@ -206,7 +234,7 @@ class Trainer:
             weight_decay=config.weight_decay,
         )
         self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-            self.optimizer, mode="max", factor=0.5, patience=3, verbose=True
+            self.optimizer, mode="max", factor=0.5, patience=3
         )
 
         # Early stopping
@@ -298,15 +326,58 @@ class Trainer:
             # Learning rate scheduling
             self.scheduler.step(val_acc)
 
+            print(f"Epoch [{epoch + 1}/{self.config.epochs}]")
+            print(f"Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f}")
+            print(f"Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}")
+
             # Early stopping check
-            self.early_stopping(val_acc, self.model)
+            saved = self.early_stopping(val_acc, self.model)
+            if saved:
+                print(
+                    f"New best model saved! Validation Accuracy: {val_acc:.4f} "
+                    f"(lr={self.optimizer.param_groups[0]['lr']:g})"
+                )
+            else:
+                print("No improvement")
 
             if self.early_stopping.early_stop:
+                print("Early stopping triggered!")
                 break
 
         # Load best model
-        self.model.load_state_dict(torch.load(self.config.model_save_path))
+        self.model.load_state_dict(
+            torch.load(self.config.model_save_path, map_location=self.device)
+        )
         return self.history
+
+    def plot_training_curves(self, save_path: Optional[str] = None) -> None:
+        """Plot loss and accuracy curves for the run."""
+        epochs = range(1, len(self.history["train_loss"]) + 1)
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
+
+        ax1.plot(epochs, self.history["train_loss"], label="Train Loss", marker="o")
+        ax1.plot(epochs, self.history["val_loss"], label="Validation Loss", marker="s")
+        ax1.set_title("Training and Validation Loss")
+        ax1.set_xlabel("Epoch")
+        ax1.set_ylabel("Loss")
+        ax1.legend()
+        ax1.grid(True, alpha=0.3)
+
+        ax2.plot(epochs, self.history["train_acc"], label="Train Accuracy", marker="o")
+        ax2.plot(
+            epochs, self.history["val_acc"], label="Validation Accuracy", marker="s"
+        )
+        ax2.set_title("Training and Validation Accuracy")
+        ax2.set_xlabel("Epoch")
+        ax2.set_ylabel("Accuracy")
+        ax2.legend()
+        ax2.grid(True, alpha=0.3)
+
+        plt.tight_layout()
+        if save_path:
+            fig.savefig(save_path)
+            print(f"Training curves saved to {save_path}")
+        plt.close(fig)
 
 
 class Evaluator:
@@ -349,9 +420,63 @@ class Evaluator:
 
         return results
 
+    def plot_confusion_matrix(
+        self,
+        results: Dict,
+        class_names: List[str],
+        title: str,
+        save_path: Optional[str] = None,
+    ) -> None:
+        cm = confusion_matrix(results["true_labels"], results["predictions"])
+        cm_percent = cm.astype("float") / cm.sum(axis=1)[:, np.newaxis] * 100
+
+        fig, ax = plt.subplots(figsize=(8, 6))
+        image = ax.imshow(cm, interpolation="nearest", cmap="Blues")
+        fig.colorbar(image, ax=ax, label="Count")
+
+        ax.set(
+            xticks=np.arange(len(class_names)),
+            yticks=np.arange(len(class_names)),
+            xticklabels=class_names,
+            yticklabels=class_names,
+            xlabel="Predicted Label",
+            ylabel="True Label",
+            title=f"{title}\nAccuracy: {results['accuracy']:.2f}%",
+        )
+
+        threshold = cm.max() / 2 if cm.size else 0
+        for i in range(cm.shape[0]):
+            for j in range(cm.shape[1]):
+                ax.text(
+                    j,
+                    i,
+                    f"{cm[i, j]}\n({cm_percent[i, j]:.1f}%)",
+                    ha="center",
+                    va="center",
+                    color="white" if cm[i, j] > threshold else "black",
+                )
+
+        plt.tight_layout()
+        if save_path:
+            fig.savefig(save_path)
+            print(f"Confusion matrix saved to {save_path}")
+        plt.close(fig)
+
+    def print_detailed_results(self, results: Dict, class_names: List[str]) -> None:
+        print(f"\nAccuracy: {results['accuracy']:.2f}%")
+        print("\nClassification Report:")
+        print(
+            classification_report(
+                results["true_labels"],
+                results["predictions"],
+                target_names=class_names,
+            )
+        )
+
 
 def main():
     config = Config()
+    seed_everything(config.seed)
 
     # Initialize data manager
     data_manager = DataManager(config)
@@ -364,7 +489,7 @@ def main():
     # Training
     trainer = Trainer(mask_detector.model, config)
     history = trainer.train(train_loader, val_loader)
-    trainer.plot_training_curves()
+    trainer.plot_training_curves("training_curves.png")
 
     # Evaluation
     evaluator = Evaluator(mask_detector.model, mask_detector.device)
@@ -372,21 +497,35 @@ def main():
     # Test on validation set
     val_results = evaluator.evaluate(val_loader, data_manager.class_names)
     evaluator.plot_confusion_matrix(
-        val_results, data_manager.class_names, "Validation Results"
+        val_results, data_manager.class_names, "Validation Results", "cm_validation.png"
     )
     evaluator.print_detailed_results(val_results, data_manager.class_names)
 
     # Test on test set
     test_results = evaluator.evaluate(test_loader, data_manager.class_names)
     evaluator.plot_confusion_matrix(
-        test_results, data_manager.class_names, "Test Results"
+        test_results, data_manager.class_names, "Test Results", "cm_test.png"
     )
     evaluator.print_detailed_results(test_results, data_manager.class_names)
 
-    # Save final model
-    torch.save(mask_detector.model.state_dict(), config.model_save_path)
+    # Optional secondary dataset, if it is available locally
+    secondary = data_manager.load_secondary_test_loader()
+    if secondary is not None:
+        secondary_loader, secondary_classes = secondary
+        secondary_results = evaluator.evaluate(secondary_loader, secondary_classes)
+        evaluator.plot_confusion_matrix(
+            secondary_results,
+            secondary_classes,
+            "Secondary Test Dataset Results",
+            "cm_secondary.png",
+        )
+        evaluator.print_detailed_results(secondary_results, secondary_classes)
+
+    # The best checkpoint was already written by EarlyStopping.
+    print(f"Best model checkpoint: {config.model_save_path}")
 
     return mask_detector, history, test_results
 
 
-model, training_history, results = main()
+if __name__ == "__main__":
+    model, training_history, results = main()
