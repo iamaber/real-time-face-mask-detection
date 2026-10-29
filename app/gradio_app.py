@@ -1,7 +1,17 @@
-import gradio as gr
+import os
+import threading
+import time
+
 import cv2
+import gradio as gr
 import requests
 from main import app
+
+API_HOST = os.environ.get("MASK_DETECTOR_API_HOST", "127.0.0.1")
+API_PORT = int(os.environ.get("MASK_DETECTOR_API_PORT", 8000))
+API_BASE_URL = f"http://{API_HOST}:{API_PORT}"
+GRADIO_HOST = os.environ.get("MASK_DETECTOR_GRADIO_HOST", "127.0.0.1")
+REQUEST_TIMEOUT = 30
 
 
 def predict_mask_image(image):
@@ -10,7 +20,10 @@ def predict_mask_image(image):
     )  # convert image format to a file-like object for the API
     files = {"file": ("image.jpg", image_encoded.tobytes(), "image/jpeg")}
 
-    response = requests.post("http://127.0.0.1:8000/predict/", files=files)
+    response = requests.post(
+        f"{API_BASE_URL}/predict/", files=files, timeout=REQUEST_TIMEOUT
+    )
+    response.raise_for_status()
 
     return response.json()
 
@@ -41,7 +54,9 @@ def predict_mask_video(video_path):
 
                 try:
                     response = requests.post(
-                        "http://127.0.0.1:8000/predict/", files=files, timeout=5
+                        f"{API_BASE_URL}/predict/",
+                        files=files,
+                        timeout=REQUEST_TIMEOUT,
                     )
                     if response.status_code == 200:
                         prediction = response.json()
@@ -106,18 +121,31 @@ with gr.Blocks() as demo:
     image_button.click(predict_mask_image, inputs=image_input, outputs=image_output)
     video_button.click(predict_mask_video, inputs=video_input, outputs=video_output)
 
+
+def wait_for_api(timeout=60, interval=0.5):
+    """Poll the API health endpoint until it responds instead of sleeping blindly."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            response = requests.get(f"{API_BASE_URL}/health", timeout=2)
+            if response.status_code == 200:
+                return True
+        except requests.exceptions.RequestException:
+            pass
+        time.sleep(interval)
+    raise RuntimeError(f"API did not become ready at {API_BASE_URL} within {timeout}s")
+
+
 if __name__ == "__main__":
-    import threading
     import uvicorn
-    import time
 
     # Start FastAPI server in a separate thread
     def run_fastapi():
-        uvicorn.run(app, host="127.0.0.1", port=8000, log_level="info")
+        uvicorn.run(app, host=API_HOST, port=API_PORT, log_level="info")
 
     fastapi_thread = threading.Thread(target=run_fastapi, daemon=True)
     fastapi_thread.start()
-    time.sleep(2)
+    wait_for_api()
 
     # Launch Gradio interface
-    demo.launch()
+    demo.launch(server_name=GRADIO_HOST)
