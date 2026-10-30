@@ -1,18 +1,19 @@
 [project]
 name = "real-time-face-mask-detection"
 version = "0.1.0"
-description = "Add your description here"
+description = "Real-time face mask detection with MobileNetV3, FastAPI and Gradio"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.116.1",
     "gradio>=5.38.2",
+    "matplotlib>=3.9.0",
     "numpy>=2.3.2",
     "opencv-python>=4.11.0.86",
     "pillow>=11.3.0",
     "python-multipart>=0.0.20",
-    "req>=1.0.0",
     "requests>=2.32.4",
+    "scikit-learn>=1.5.0",
     "torch>=2.7.1",
     "torchvision>=0.22.1",
     "uvicorn>=0.35.0",
