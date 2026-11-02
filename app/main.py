@@ -22,7 +22,12 @@ state: dict = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    state["model"] = get_model()
+    try:
+        state["model"] = get_model()
+    except (FileNotFoundError, RuntimeError) as exc:
+        # Keep serving so /health can explain why inference is unavailable.
+        state["load_error"] = str(exc)
+        print(f"Model unavailable: {exc}")
     yield
     state.clear()
 
@@ -32,11 +37,21 @@ app = FastAPI(lifespan=lifespan)
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "model_loaded": "model" in state}
+    loaded = "model" in state
+    payload = {"status": "ok" if loaded else "degraded", "model_loaded": loaded}
+    if "load_error" in state:
+        payload["detail"] = state["load_error"]
+    return payload
 
 
 @app.post("/predict/")
 def predict_mask(file: UploadFile = File(...)):
+    if "model" not in state:
+        raise HTTPException(
+            status_code=503,
+            detail=state.get("load_error", "Model is not loaded"),
+        )
+
     if file.content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(
             status_code=400,

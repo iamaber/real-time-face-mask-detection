@@ -1,3 +1,5 @@
+import os
+
 import cv2
 import numpy as np
 import torch
@@ -11,10 +13,32 @@ from config import Config, resolve_model_path
 # Display labels in ImageFolder's sorted order: 0 -> "WithMask", 1 -> "WithoutMask".
 CLASS_NAMES = ["With Mask", "Without Mask"]
 
+LFS_POINTER_PREFIX = b"version https://git-lfs.github.com/spec/v1"
+
+
+def _assert_hydrated_checkpoint(model_path):
+    """Fail loudly when Git LFS never fetched the weights.
+
+    An unhydrated checkout leaves a ~130 byte pointer file here, which torch.load
+    reports as an inscrutable unpickling error.
+    """
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(
+            f"Model checkpoint not found: {model_path}. Set MASK_DETECTOR_MODEL_PATH "
+            f"or train a model first."
+        )
+    with open(model_path, "rb") as handle:
+        if handle.read(len(LFS_POINTER_PREFIX)) == LFS_POINTER_PREFIX:
+            raise RuntimeError(
+                f"{model_path} is a Git LFS pointer, not model weights. Run "
+                f"`git lfs install && git lfs pull` to download the checkpoint."
+            )
+
 
 def get_model(model_path=None, num_classes=2):
     config = Config()
     model_path = model_path or resolve_model_path()
+    _assert_hydrated_checkpoint(model_path)
     model = models.mobilenet_v3_large(weights=None)
     model.classifier = nn.Sequential(
         nn.Linear(960, 1280),
