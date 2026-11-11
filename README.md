@@ -45,11 +45,11 @@ The project uses two different datasets for comprehensive training and evaluatio
 
 ### Installation
 
-#### Using uv (Recommended)
 
 [`pyproject.toml`](pyproject.toml) plus [`uv.lock`](uv.lock) are the single source of
 truth for dependencies. Do not install from a hand-written requirements file: the lock
-file is what pins exact versions.
+file is what pins exact versions. The project is not a pip-installable package (it
+declares no build backend), so `uv sync` is the only supported install route.
 
 ```bash
 # Install uv if you haven't already
@@ -64,23 +64,6 @@ uv sync
 source .venv/bin/activate  # On Unix/macOS
 # or
 .venv\Scripts\activate  # On Windows
-```
-
-#### Using pip
-
-```bash
-# Clone the repository
-git clone https://github.com/iamaber/real-time-face-mask-detection.git
-cd real-time-face-mask-detection
-
-# Create and activate virtual environment
-python -m venv venv
-source venv/bin/activate  # On Unix/macOS
-# or
-venv\Scripts\activate  # On Windows
-
-# Install the project and its dependencies from pyproject.toml
-pip install -e .
 ```
 
 ### 🎮 Usage
