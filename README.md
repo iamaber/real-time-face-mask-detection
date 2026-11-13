@@ -94,9 +94,12 @@ preview window to stop.
 Both scripts accept `--model_path` to point at a different checkpoint. By default they load
 `models/best_mobilenet_mask_detector.pt`, or the path in `MASK_DETECTOR_MODEL_PATH`.
 
-> **Model weights:** the checkpoint is stored with Git LFS. Run `git lfs install` once and
-> `git lfs pull` after cloning, otherwise the file is a small pointer stub rather than
-> weights. Without it, inference fails on load and the API reports `model_loaded: false`.
+> **Model weights:** `models/best_mobilenet_mask_detector.pt` is tracked with Git LFS, so a
+> clone made without git-lfs holds a small text pointer instead of weights. In a fresh
+> clone run `git lfs install && git lfs pull` to fetch it. If the file is still a pointer
+> afterwards (the LFS object is not available from your remote), train a checkpoint with
+> `python train.py` or point `MASK_DETECTOR_MODEL_PATH` at one. With only the pointer,
+> inference fails on load and the API reports `model_loaded: false`.
 
 ## 📈 Model Performance
 

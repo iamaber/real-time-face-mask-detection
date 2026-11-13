@@ -31,7 +31,9 @@ def _assert_hydrated_checkpoint(model_path):
         if handle.read(len(LFS_POINTER_PREFIX)) == LFS_POINTER_PREFIX:
             raise RuntimeError(
                 f"{model_path} is a Git LFS pointer, not model weights. Run "
-                f"`git lfs install && git lfs pull` to download the checkpoint."
+                f"`git lfs install && git lfs pull` in the clone to fetch it; if "
+                f"it is still a pointer afterwards, train one with `python "
+                f"train.py` or set MASK_DETECTOR_MODEL_PATH to a checkpoint."
             )
 
 
