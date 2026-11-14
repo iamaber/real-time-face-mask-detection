@@ -4,9 +4,11 @@ This project implements a real-time face mask detection system using PyTorch and
 
 ![Python](https://img.shields.io/badge/python-v3.12+-blue.svg)
 ![PyTorch](https://img.shields.io/badge/PyTorch-v2.7+-red.svg)
-![FastAPI](https://img.shields.io/badge/FastAPI-v0.78+-yellow.svg)
-![Gradio](https://img.shields.io/badge/Gradio-v3.0+-orange.svg)
+![FastAPI](https://img.shields.io/badge/FastAPI-v0.116+-yellow.svg)
+![Gradio](https://img.shields.io/badge/Gradio-v5.38+-orange.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
+
+**Live demo:** [huggingface.co/spaces/iamaber/face-mask-detector](https://huggingface.co/spaces/iamaber/face-mask-detector)
 
 ## 🎯 Features
 
