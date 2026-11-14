@@ -124,12 +124,14 @@ The committed output trained for **10 of 25** epochs and then stopped: validatio
 peaked at epoch 3 (99.50%) and early stopping fired after 7 epochs without improvement.
 The best checkpoint is therefore from epoch 3, not from the end of the run.
 
-Confusion matrices for both splits are plotted in the notebook as heatmaps (cells 17-18)
-with per-cell counts and percentages, rather than as a table here — that avoids quoting
-numbers the notebook did not print.
+The notebook computes and plots confusion-matrix heatmaps for both splits when it is run
+(cells 17-18). The rendered images are not stored in the committed notebook (plot outputs
+were stripped to keep it small), and no table is given here — that avoids quoting numbers
+the notebook did not print.
 
 ### Loss and Accuracy Curves
-Training and validation metrics over epochs are plotted in notebook cell 14:
+The notebook plots training and validation curves when it is run (cell 14; the rendered
+image is likewise not stored). The printed epoch log (cell 13) shows:
 - Training loss falls from 0.0308 (epoch 1) to 0.0083 (epoch 10)
 - Validation accuracy stays between 98.75% and 99.50%
 - Early stopping triggered after epoch 10, not "around epoch 20-25"
