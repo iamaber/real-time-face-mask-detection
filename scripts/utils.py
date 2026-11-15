@@ -62,8 +62,9 @@ def get_model(model_path=None, num_classes=2):
 def preprocess_image(image):
     """Convert an image to a normalised model input tensor.
 
-    Accepts a PIL image or a numpy array. Arrays are assumed to be in the BGR
-    order returned by ``cv2.imread`` and are converted to RGB; pass a PIL image
+    Accepts a PIL image or a numpy array. 3- and 4-channel arrays are assumed to
+    be in the BGR / BGRA order returned by ``cv2.imread`` and are converted to
+    RGB; 2-D grayscale arrays are replicated across channels. Pass a PIL image
     when the data is already RGB.
     """
     transform = transforms.Compose(
@@ -74,8 +75,11 @@ def preprocess_image(image):
         ]
     )
     if isinstance(image, np.ndarray):
-        # cv2 decodes BGR, while the model was trained on RGB PIL images.
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        # cv2 decodes BGR(A), while the model was trained on RGB PIL images.
+        if image.ndim == 3 and image.shape[2] == 3:
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        elif image.ndim == 3 and image.shape[2] == 4:
+            image = cv2.cvtColor(image, cv2.COLOR_BGRA2RGB)
         image = Image.fromarray(image)
     image = image.convert("RGB")
     return transform(image).unsqueeze(0)

@@ -346,7 +346,11 @@ class Trainer:
 
         # Load best model
         self.model.load_state_dict(
-            torch.load(self.config.model_save_path, map_location=self.device)
+            torch.load(
+                self.config.model_save_path,
+                map_location=self.device,
+                weights_only=True,
+            )
         )
         return self.history
 
